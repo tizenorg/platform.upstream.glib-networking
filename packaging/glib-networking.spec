@@ -33,7 +33,6 @@ make %{?_smp_mflags} V=1
 %make_install
 %find_lang %{name}
 
-
 %post
 %glib2_gio_module_post
 
@@ -42,8 +41,9 @@ make %{?_smp_mflags} V=1
 
 %files
 %defattr(-, root, root)
-%doc COPYING
+%license COPYING
 %{_libdir}/gio/modules/libgiognutls.so
+
 #%{_libdir}/gio/modules/libgiolibproxy.so
 #%{_libexecdir}/glib-pacrunner
 #%{_datadir}/dbus-1/services/org.gtk.GLib.PACRunner.service
