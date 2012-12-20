@@ -1,5 +1,5 @@
 Name:           glib-networking
-Version:        2.35.1
+Version:        2.35.3
 Release:        0
 License:        LGPL-2.1+
 Summary:        Network-related GIO modules for glib
