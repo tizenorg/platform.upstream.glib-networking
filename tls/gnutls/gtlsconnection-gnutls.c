@@ -100,6 +100,9 @@ struct _GTlsConnectionGnutlsPrivate
 
   GTlsCertificate *certificate, *peer_certificate;
   GTlsCertificateFlags peer_certificate_errors;
+  GTlsCertificate *peer_certificate_tmp;
+  GTlsCertificateFlags peer_certificate_errors_tmp;
+
   gboolean require_close_notify;
   GTlsRehandshakeMode rehandshake_mode;
   gboolean is_system_certdb;
@@ -107,19 +110,19 @@ struct _GTlsConnectionGnutlsPrivate
   gboolean database_is_unset;
 
   /* need_handshake means the next claim_op() will get diverted into
-   * an implicit handshake (unless it's an OP_HANDSHAKE itself).
-   * need_finish_handshake means the next claim_op() will get
-   * diverted into finish_handshake().
+   * an implicit handshake (unless it's an OP_HANDSHAKE or OP_CLOSE).
+   * need_finish_handshake means the next claim_op() will get diverted
+   * into finish_handshake() (unless it's an OP_CLOSE).
    *
-   * handshaking is TRUE as soon as a handshake thread is queued.
-   * Normally it becomes FALSE after finish_handshake() completes. For
-   * an implicit handshake, but in the case of an async implicit
-   * handshake, it becomes FALSE at the end of handshake_thread(),
-   * (and then the next read/write op will call finish_handshake()).
-   * This is because we don't want to call finish_handshake() (and
-   * possibly emit signals) if the caller is not actually in a TLS op
-   * at the time. (Eg, if they're waiting to try a nonblocking call
-   * again, we don't want to emit the signal until they do.)
+   * handshaking is TRUE as soon as a handshake thread is queued. For
+   * a sync handshake it becomes FALSE after finish_handshake()
+   * completes in the calling thread, but for an async implicit
+   * handshake, it becomes FALSE (and need_finish_handshake becomes
+   * TRUE) at the end of the handshaking thread (and then the next
+   * non-close op will call finish_handshake()). We can't just wait
+   * for handshake_thread_completed() to run, because it's possible
+   * that its main loop is being blocked by a synchronous op which is
+   * waiting for handshaking to become FALSE...
    *
    * started_handshake indicates that the current handshake attempt
    * got at least as far as calling gnutls_handshake() (and so any
@@ -291,6 +294,7 @@ g_tls_connection_gnutls_finalize (GObject *object)
   g_clear_object (&gnutls->priv->database);
   g_clear_object (&gnutls->priv->certificate);
   g_clear_object (&gnutls->priv->peer_certificate);
+  g_clear_object (&gnutls->priv->peer_certificate_tmp);
 
 #ifdef HAVE_PKCS11
   p11_kit_pin_unregister_callback (gnutls->priv->interaction_id,
@@ -524,7 +528,8 @@ claim_op (GTlsConnectionGnutls    *gnutls,
       return FALSE;
     }
 
-  if (op != G_TLS_CONNECTION_GNUTLS_OP_HANDSHAKE)
+  if (op != G_TLS_CONNECTION_GNUTLS_OP_HANDSHAKE &&
+      op != G_TLS_CONNECTION_GNUTLS_OP_CLOSE)
     {
       if (gnutls->priv->need_handshake)
 	{
@@ -539,18 +544,19 @@ claim_op (GTlsConnectionGnutls    *gnutls,
 
       if (gnutls->priv->need_finish_handshake)
 	{
+	  GError *my_error = NULL;
 	  gboolean success;
 
 	  gnutls->priv->need_finish_handshake = FALSE;
 
 	  g_mutex_unlock (&gnutls->priv->op_mutex);
-	  success = finish_handshake (gnutls, gnutls->priv->implicit_handshake, error);
+	  success = finish_handshake (gnutls, gnutls->priv->implicit_handshake, &my_error);
 	  g_clear_object (&gnutls->priv->implicit_handshake);
 	  g_mutex_lock (&gnutls->priv->op_mutex);
 
-	  gnutls->priv->handshaking = FALSE;
-	  if (!success || g_cancellable_set_error_if_cancelled (cancellable, error))
+	  if (!success || g_cancellable_set_error_if_cancelled (cancellable, &my_error))
 	    {
+	      g_propagate_error (error, my_error);
 	      g_mutex_unlock (&gnutls->priv->op_mutex);
 	      return FALSE;
 	    }
@@ -691,6 +697,9 @@ end_gnutls_io (GTlsConnectionGnutls  *gnutls,
   if (gnutls->priv->handshaking && !gnutls->priv->ever_handshaked)
     {
       if (g_error_matches (my_error, G_IO_ERROR, G_IO_ERROR_FAILED) ||
+#if GLIB_CHECK_VERSION (2, 35, 3)
+	  g_error_matches (my_error, G_IO_ERROR, G_IO_ERROR_BROKEN_PIPE) ||
+#endif
 	  status == GNUTLS_E_UNEXPECTED_PACKET_LENGTH ||
 	  status == GNUTLS_E_FATAL_ALERT_RECEIVED ||
 	  status == GNUTLS_E_DECRYPTION_FAILED ||
@@ -747,6 +756,12 @@ end_gnutls_io (GTlsConnectionGnutls  *gnutls,
 	}
       else
 	return 0;
+    }
+  else if (status == GNUTLS_E_NO_CERTIFICATE_FOUND)
+    {
+      g_set_error_literal (error, G_TLS_ERROR, G_TLS_ERROR_CERTIFICATE_REQUIRED,
+                           _("TLS connection peer did not send a certificate"));
+      return status;
     }
 
   if (error)
@@ -1023,64 +1038,6 @@ g_tls_connection_gnutls_push_func (gnutls_transport_ptr_t  transport_data,
   return ret;
 }
 
-static void
-handshake_thread (GTask        *task,
-		  gpointer      object,
-		  gpointer      task_data,
-		  GCancellable *cancellable)
-{
-  GTlsConnectionGnutls *gnutls = object;
-  gboolean is_client;
-  GError *error = NULL;
-  int ret;
-
-  gnutls->priv->started_handshake = FALSE;
-
-  if (!claim_op (gnutls, G_TLS_CONNECTION_GNUTLS_OP_HANDSHAKE,
-		 TRUE, cancellable, &error))
-    {
-      g_task_return_error (task, error);
-      return;
-    }
-
-  g_clear_error (&gnutls->priv->handshake_error);
-
-  is_client = G_IS_TLS_CLIENT_CONNECTION (gnutls);
-
-  if (!is_client && gnutls->priv->ever_handshaked &&
-      !gnutls->priv->implicit_handshake)
-    {
-      BEGIN_GNUTLS_IO (gnutls, G_IO_IN | G_IO_OUT, TRUE, cancellable);
-      ret = gnutls_rehandshake (gnutls->priv->session);
-      END_GNUTLS_IO (gnutls, G_IO_IN | G_IO_OUT, ret,
-		     _("Error performing TLS handshake: %s"), &error);
-
-      if (error)
-	{
-	  g_task_return_error (task, error);
-	  return;
-	}
-    }
-
-  gnutls->priv->started_handshake = TRUE;
-
-  g_clear_object (&gnutls->priv->peer_certificate);
-  gnutls->priv->peer_certificate_errors = 0;
-
-  g_tls_connection_gnutls_set_handshake_priority (gnutls);
-
-  BEGIN_GNUTLS_IO (gnutls, G_IO_IN | G_IO_OUT, TRUE, cancellable);
-  ret = gnutls_handshake (gnutls->priv->session);
-  END_GNUTLS_IO (gnutls, G_IO_IN | G_IO_OUT, ret,
-		 _("Error performing TLS handshake: %s"), &error);
-
-  gnutls->priv->ever_handshaked = TRUE;
-
-  if (error)
-    g_task_return_error (task, error);
-  else
-    g_task_return_boolean (task, TRUE);
-}
 
 static GTlsCertificate *
 get_peer_certificate_from_session (GTlsConnectionGnutls *gnutls)
@@ -1154,6 +1111,82 @@ verify_peer_certificate (GTlsConnectionGnutls *gnutls,
   return errors;
 }
 
+static void
+handshake_thread (GTask        *task,
+		  gpointer      object,
+		  gpointer      task_data,
+		  GCancellable *cancellable)
+{
+  GTlsConnectionGnutls *gnutls = object;
+  gboolean is_client;
+  GError *error = NULL;
+  int ret;
+
+  gnutls->priv->started_handshake = FALSE;
+
+  if (!claim_op (gnutls, G_TLS_CONNECTION_GNUTLS_OP_HANDSHAKE,
+		 TRUE, cancellable, &error))
+    {
+      g_task_return_error (task, error);
+      return;
+    }
+
+  g_clear_error (&gnutls->priv->handshake_error);
+
+  is_client = G_IS_TLS_CLIENT_CONNECTION (gnutls);
+
+  if (!is_client && gnutls->priv->ever_handshaked &&
+      !gnutls->priv->implicit_handshake)
+    {
+      BEGIN_GNUTLS_IO (gnutls, G_IO_IN | G_IO_OUT, TRUE, cancellable);
+      ret = gnutls_rehandshake (gnutls->priv->session);
+      END_GNUTLS_IO (gnutls, G_IO_IN | G_IO_OUT, ret,
+		     _("Error performing TLS handshake: %s"), &error);
+
+      if (error)
+	{
+	  g_task_return_error (task, error);
+	  return;
+	}
+    }
+
+  gnutls->priv->started_handshake = TRUE;
+
+  g_clear_object (&gnutls->priv->peer_certificate);
+  gnutls->priv->peer_certificate_errors = 0;
+
+  g_tls_connection_gnutls_set_handshake_priority (gnutls);
+
+  BEGIN_GNUTLS_IO (gnutls, G_IO_IN | G_IO_OUT, TRUE, cancellable);
+  ret = gnutls_handshake (gnutls->priv->session);
+  END_GNUTLS_IO (gnutls, G_IO_IN | G_IO_OUT, ret,
+		 _("Error performing TLS handshake: %s"), &error);
+
+  if (ret == 0 && gnutls_certificate_type_get (gnutls->priv->session) == GNUTLS_CRT_X509)
+    {
+      gnutls->priv->peer_certificate_tmp = get_peer_certificate_from_session (gnutls);
+      if (gnutls->priv->peer_certificate_tmp)
+	gnutls->priv->peer_certificate_errors_tmp = verify_peer_certificate (gnutls, gnutls->priv->peer_certificate_tmp);
+      else if (G_IS_TLS_CLIENT_CONNECTION (gnutls))
+	{
+	  g_set_error_literal (&error, G_TLS_ERROR, G_TLS_ERROR_BAD_CERTIFICATE,
+			       _("Server did not return a valid TLS certificate"));
+	}
+    }
+
+  G_TLS_CONNECTION_GNUTLS_GET_CLASS (gnutls)->finish_handshake (gnutls, &error);
+
+  if (error)
+    {
+      g_task_return_error (task, error);
+    }
+  else
+    {
+      gnutls->priv->ever_handshaked = TRUE;
+      g_task_return_boolean (task, TRUE);
+    }
+}
+
 static gboolean
 accept_peer_certificate (GTlsConnectionGnutls *gnutls,
 			 GTlsCertificate      *peer_certificate,
@@ -1185,6 +1218,12 @@ accept_peer_certificate (GTlsConnectionGnutls *gnutls,
   return accepted;
 }
 
+static void
+begin_handshake (GTlsConnectionGnutls *gnutls)
+{
+  G_TLS_CONNECTION_GNUTLS_GET_CLASS (gnutls)->begin_handshake (gnutls);
+}
+
 static gboolean
 finish_handshake (GTlsConnectionGnutls  *gnutls,
 		  GTask                 *task,
@@ -1195,15 +1234,13 @@ finish_handshake (GTlsConnectionGnutls  *gnutls,
 
   g_assert (error != NULL);
 
-  if (g_task_propagate_boolean (task, error) &&
-      gnutls_certificate_type_get (gnutls->priv->session) == GNUTLS_CRT_X509)
-    peer_certificate = get_peer_certificate_from_session (gnutls);
-  else
-    peer_certificate = NULL;
+  peer_certificate = gnutls->priv->peer_certificate_tmp;
+  gnutls->priv->peer_certificate_tmp = NULL;
+  peer_certificate_errors = gnutls->priv->peer_certificate_errors_tmp;
+  gnutls->priv->peer_certificate_errors_tmp = 0;
 
-  if (peer_certificate)
+  if (g_task_propagate_boolean (task, error) && peer_certificate)
     {
-      peer_certificate_errors = verify_peer_certificate (gnutls, peer_certificate);
       if (!accept_peer_certificate (gnutls, peer_certificate,
 				    peer_certificate_errors))
 	{
@@ -1216,13 +1253,6 @@ finish_handshake (GTlsConnectionGnutls  *gnutls,
       g_object_notify (G_OBJECT (gnutls), "peer-certificate");
       g_object_notify (G_OBJECT (gnutls), "peer-certificate-errors");
     }
-  else if (error && !*error && G_IS_TLS_CLIENT_CONNECTION (gnutls))
-    {
-      g_set_error_literal (error, G_TLS_ERROR, G_TLS_ERROR_BAD_CERTIFICATE,
-			   _("Server did not return a valid TLS certificate"));
-    }
-
-  G_TLS_CONNECTION_GNUTLS_GET_CLASS (gnutls)->finish_handshake (gnutls, error);
 
   if (*error && gnutls->priv->started_handshake)
     gnutls->priv->handshake_error = g_error_copy (*error);
@@ -1241,6 +1271,7 @@ g_tls_connection_gnutls_handshake (GTlsConnection   *conn,
   GError *my_error = NULL;
 
   task = g_task_new (conn, cancellable, NULL, NULL);
+  begin_handshake (gnutls);
   g_task_run_in_thread_sync (task, handshake_thread);
   success = finish_handshake (gnutls, task, &my_error);
   g_object_unref (task);
@@ -1265,16 +1296,54 @@ handshake_thread_completed (GObject      *object,
   GTask *caller_task = user_data;
   GTlsConnectionGnutls *gnutls = g_task_get_source_object (caller_task);
   GError *error = NULL;
-  gboolean success;
+  gboolean need_finish_handshake, success;
 
-  success = finish_handshake (gnutls, G_TASK (result), &error);
-  yield_op (gnutls, G_TLS_CONNECTION_GNUTLS_OP_HANDSHAKE);
-
-  if (success)
-    g_task_return_boolean (caller_task, TRUE);
+  g_mutex_lock (&gnutls->priv->op_mutex);
+  if (gnutls->priv->need_finish_handshake)
+    {
+      need_finish_handshake = TRUE;
+      gnutls->priv->need_finish_handshake = FALSE;
+    }
   else
-    g_task_return_error (caller_task, error);
+    need_finish_handshake = FALSE;
+  g_mutex_unlock (&gnutls->priv->op_mutex);
+
+  if (need_finish_handshake)
+    {
+      success = finish_handshake (gnutls, G_TASK (result), &error);
+      if (success)
+	g_task_return_boolean (caller_task, TRUE);
+      else
+	g_task_return_error (caller_task, error);
+    }
+  else if (gnutls->priv->handshake_error)
+    g_task_return_error (caller_task, g_error_copy (gnutls->priv->handshake_error));
+  else
+    g_task_return_boolean (caller_task, TRUE);
+
   g_object_unref (caller_task);
+}
+
+static void
+async_handshake_thread (GTask        *task,
+			gpointer      object,
+			gpointer      task_data,
+			GCancellable *cancellable)
+{
+  GTlsConnectionGnutls *gnutls = object;
+
+  handshake_thread (task, object, task_data, cancellable);
+
+  g_mutex_lock (&gnutls->priv->op_mutex);
+  gnutls->priv->need_finish_handshake = TRUE;
+  /* yield_op will clear handshaking too, but we don't want the
+   * connection to be briefly "handshaking && need_finish_handshake"
+   * after we unlock the mutex.
+   */
+  gnutls->priv->handshaking = FALSE;
+  g_mutex_unlock (&gnutls->priv->op_mutex);
+
+  yield_op (gnutls, G_TLS_CONNECTION_GNUTLS_OP_HANDSHAKE);
 }
 
 static void
@@ -1289,10 +1358,12 @@ g_tls_connection_gnutls_handshake_async (GTlsConnection       *conn,
   caller_task = g_task_new (conn, cancellable, callback, user_data);
   g_task_set_priority (caller_task, io_priority);
 
+  begin_handshake (G_TLS_CONNECTION_GNUTLS (conn));
+
   thread_task = g_task_new (conn, cancellable,
 			    handshake_thread_completed, caller_task);
   g_task_set_priority (thread_task, io_priority);
-  g_task_run_in_thread (thread_task, handshake_thread);
+  g_task_run_in_thread (thread_task, async_handshake_thread);
   g_object_unref (thread_task);
 }
 
@@ -1306,20 +1377,6 @@ g_tls_connection_gnutls_handshake_finish (GTlsConnection       *conn,
   return g_task_propagate_boolean (G_TASK (result), error);
 }
 
-static void
-implicit_handshake_completed (GObject      *object,
-			      GAsyncResult *result,
-			      gpointer      user_data)
-{
-  GTlsConnectionGnutls *gnutls = G_TLS_CONNECTION_GNUTLS (object);
-
-  g_mutex_lock (&gnutls->priv->op_mutex);
-  gnutls->priv->need_finish_handshake = TRUE;
-  g_mutex_unlock (&gnutls->priv->op_mutex);
-
-  yield_op (gnutls, G_TLS_CONNECTION_GNUTLS_OP_HANDSHAKE);
-}
-
 static gboolean
 do_implicit_handshake (GTlsConnectionGnutls  *gnutls,
 		       gboolean               blocking,
@@ -1328,9 +1385,9 @@ do_implicit_handshake (GTlsConnectionGnutls  *gnutls,
 {
   /* We have op_mutex */
 
-  gnutls->priv->implicit_handshake = g_task_new (gnutls, cancellable,
-						 implicit_handshake_completed,
-						 NULL);
+  gnutls->priv->implicit_handshake = g_task_new (gnutls, cancellable, NULL, NULL);
+
+  begin_handshake (gnutls);
 
   if (blocking)
     {
@@ -1354,7 +1411,7 @@ do_implicit_handshake (GTlsConnectionGnutls  *gnutls,
   else
     {
       g_task_run_in_thread (gnutls->priv->implicit_handshake,
-			    handshake_thread);
+			    async_handshake_thread);
 
       g_set_error_literal (error, G_IO_ERROR, G_IO_ERROR_WOULD_BLOCK,
 			   _("Operation would block"));

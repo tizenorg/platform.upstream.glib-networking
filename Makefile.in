@@ -59,7 +59,7 @@ DIST_COMMON = README $(am__configure_deps) $(srcdir)/Makefile.am \
 @HAVE_LIBPROXY_TRUE@am__append_1 = proxy/libproxy
 @HAVE_GNOME_PROXY_TRUE@am__append_2 = proxy/gnome
 @HAVE_PKCS11_TRUE@am__append_3 = tls/pkcs11
-@HAVE_GNUTLS_TRUE@am__append_4 = tls/gnutls
+@HAVE_GNUTLS_TRUE@am__append_4 = tls/gnutls tls/tests
 subdir = .
 ACLOCAL_M4 = $(top_srcdir)/aclocal.m4
 am__aclocal_m4_deps = $(top_srcdir)/m4/intltool.m4 \
@@ -336,7 +336,7 @@ EXTRA_DIST =
 TEST_PROGS = 
 ACLOCAL_AMFLAGS = -I m4 ${ACLOCAL_FLAGS}
 SUBDIRS = po $(am__append_1) $(am__append_2) proxy/tests \
-	$(am__append_3) $(am__append_4) tls/tests
+	$(am__append_3) $(am__append_4)
 all: config.h
 	$(MAKE) $(AM_MAKEFLAGS) all-recursive
 
