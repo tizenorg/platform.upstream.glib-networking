@@ -1,11 +1,12 @@
 Name:           glib-networking
-Version:        2.35.3
+Version:        2.35.6
 Release:        0
 License:        LGPL-2.1+
 Summary:        Network-related GIO modules for glib
 Group:          System/Libraries
 Source:         http://download.gnome.org/sources/glib-networking/2.32/%{name}-%{version}.tar.xz
 Source99:       baselibs.conf
+Url:            http://www.gnome.org
 BuildRequires:  intltool
 BuildRequires:  libgcrypt-devel
 BuildRequires:  pkgconfig(dbus-1)
