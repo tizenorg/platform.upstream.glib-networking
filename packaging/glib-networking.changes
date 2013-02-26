@@ -1,3 +1,6 @@
+* Tue Feb 26 2013 Anas Nashif <anas.nashif@intel.com> upstream/2.35.8@5ca9624
+- Update to 2.35.8
+
 * Mon Feb 25 2013 Anas Nashif <anas.nashif@intel.com> accepted/trunk/20130208.141437@4d0d50b
 - Enable libproxy (base on project)
 
