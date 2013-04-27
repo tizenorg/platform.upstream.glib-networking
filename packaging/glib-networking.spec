@@ -1,6 +1,6 @@
 %bcond_with libproxy
 Name:           glib-networking
-Version:        2.36.0
+Version:        2.36.1
 Release:        0
 License:        LGPL-2.1+
 Summary:        Network-related GIO modules for glib
