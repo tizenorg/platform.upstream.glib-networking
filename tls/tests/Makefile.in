@@ -61,7 +61,10 @@ noinst_PROGRAMS = $(am__EXEEXT_3)
 @HAVE_PKCS11_TRUE@	pkcs11-pin         \
 @HAVE_PKCS11_TRUE@	pkcs11-slot
 
-@HAVE_PKCS11_TRUE@am__append_2 = $(PKCS11_CFLAGS)
+@HAVE_PKCS11_TRUE@am__append_2 = \
+@HAVE_PKCS11_TRUE@	$(PKCS11_CFLAGS)	\
+@HAVE_PKCS11_TRUE@	$(GNUTLS_CFLAGS)
+
 @HAVE_PKCS11_TRUE@am__append_3 = $(top_builddir)/tls/pkcs11/libgiopkcs11.la $(PKCS11_LIBS)
 subdir = tls/tests
 ACLOCAL_M4 = $(top_srcdir)/aclocal.m4

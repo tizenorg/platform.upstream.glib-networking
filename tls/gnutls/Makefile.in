@@ -349,8 +349,7 @@ NULL =
 module_flags = -export_dynamic -avoid-version -module -no-undefined -export-symbols-regex '^g_io_module_(load|unload|query)'
 giomoduledir = $(GIO_MODULE_DIR)
 INCLUDES = -DG_LOG_DOMAIN=\"GLib-Net\" -DG_DISABLE_DEPRECATED \
-	$(GLIB_CFLAGS) $(NULL) $(P11_CFLAGS) $(LIBGNUTLS_CFLAGS) \
-	$(NULL)
+	$(GLIB_CFLAGS) $(NULL) $(P11_CFLAGS) $(GNUTLS_CFLAGS) $(NULL)
 
 ### gtester stuff from glib
 GTESTER = gtester 			# for non-GLIB packages
