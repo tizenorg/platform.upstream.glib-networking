@@ -1,6 +1,6 @@
 %bcond_with libproxy
 Name:           glib-networking
-Version:        2.36.1
+Version:        2.36.2
 Release:        0
 License:        LGPL-2.1+
 Summary:        Network-related GIO modules for glib
@@ -29,6 +29,7 @@ Currently, there is only a proxy module based on libproxy.
 %setup -q
 
 %build
+NOCONFIGURE=1 ./autogen.sh
 %configure \
     --disable-static \
 %if %{with libproxy}
