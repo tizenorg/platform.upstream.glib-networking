@@ -7,6 +7,7 @@ Summary:        Network-related GIO modules for glib
 Group:          System/Libraries
 Source:         http://download.gnome.org/sources/glib-networking/2.35/%{name}-%{version}.tar.xz
 Source99:       baselibs.conf
+Source1001: 	glib-networking.manifest
 Url:            http://www.gnome.org
 BuildRequires:  intltool
 BuildRequires:  libgcrypt-devel
@@ -27,6 +28,7 @@ Currently, there is only a proxy module based on libproxy.
 
 %prep
 %setup -q
+cp %{SOURCE1001} .
 
 %build
 NOCONFIGURE=1 ./autogen.sh
@@ -49,6 +51,7 @@ make %{?_smp_mflags} V=1
 %glib2_gio_module_postun
 
 %files
+%manifest %{name}.manifest
 %defattr(-, root, root)
 %license COPYING
 %{_libdir}/gio/modules/libgiognutls.so
