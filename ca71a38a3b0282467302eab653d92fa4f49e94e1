@@ -1,0 +1,8 @@
+Change-Id: Ica71a38a3b0282467302eab653d92fa4f49e94e1
+Code-Review+2: Ryan Ware <ware@linux.intel.com>
+Verified+1: Ryan Ware <ware@linux.intel.com>
+Submitted-by: Ryan Ware <ware@linux.intel.com>
+Submitted-at: Mon, 08 Jul 2013 10:05:22 -0700
+Reviewed-on: https://review.tizen.org/gerrit/4703
+Project: platform/upstream/glib-networking
+Branch: refs/heads/tizen
