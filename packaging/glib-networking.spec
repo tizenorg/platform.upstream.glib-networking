@@ -1,13 +1,13 @@
 %bcond_with libproxy
 Name:           glib-networking
-Version:        2.36.2
+Version:        2.38.0
 Release:        0
 License:        LGPL-2.1+
 Summary:        Network-related GIO modules for glib
 Group:          System/Libraries
 Source:         http://download.gnome.org/sources/glib-networking/2.35/%{name}-%{version}.tar.xz
 Source99:       baselibs.conf
-Source1001: 	glib-networking.manifest
+Source1001:     glib-networking.manifest
 Url:            http://www.gnome.org
 BuildRequires:  intltool
 BuildRequires:  libgcrypt-devel
@@ -31,14 +31,13 @@ Currently, there is only a proxy module based on libproxy.
 cp %{SOURCE1001} .
 
 %build
-NOCONFIGURE=1 ./autogen.sh
-%configure \
+%autogen \
     --disable-static \
 %if %{with libproxy}
     --with-libproxy  \
 %endif
     --with-ca-certificates=/etc/ssl/ca-bundle.pem
-make %{?_smp_mflags} V=1
+%__make %{?_smp_mflags} V=1
 
 %install
 %make_install
@@ -61,6 +60,3 @@ make %{?_smp_mflags} V=1
 %{_libexecdir}/glib-pacrunner
 %{_datadir}/dbus-1/services/org.gtk.GLib.PACRunner.service
 %endif
-
-
-%changelog
