@@ -27,6 +27,13 @@
 #include <glib/gi18n-lib.h>
 #include <gnutls/x509.h>
 
+#include <TIZEN.h>
+
+#if ENABLE(TIZEN_TV_MULTIPLE_CERTIFICATE)
+#include <dirent.h>
+#include <stdio.h>
+#include <sys/stat.h>
+#endif
 static void g_tls_file_database_gnutls_file_database_interface_init (GTlsFileDatabaseInterface *iface);
 
 static void g_tls_file_database_gnutls_initable_interface_init (GInitableIface *iface);
@@ -199,6 +206,10 @@ load_anchor_file (const gchar *filename,
   if (my_error)
     {
       g_propagate_error (error, my_error);
+#if ENABLE(TIZEN_TV_MULTIPLE_CERTIFICATE)
+      if ((error != NULL) && (*error != my_error))
+        g_error_free (my_error);
+#endif
       return FALSE;
     }
 
@@ -247,6 +258,45 @@ load_anchor_file (const gchar *filename,
 }
 
 
+#if ENABLE(TIZEN_TV_MULTIPLE_CERTIFICATE)
+static gboolean
+traverse_load_anchor_file (const gchar *filename,
+                           GHashTable  *subjects,
+                           GHashTable  *issuers,
+                           GHashTable  *complete,
+                           GError     **error)
+{
+  struct stat buf;
+  gboolean result = FALSE;
+  if (!stat(filename, &buf))
+    {
+      if (S_ISREG(buf.st_mode))
+          result = load_anchor_file (filename, subjects, issuers, complete, error);
+      else if (S_ISDIR(buf.st_mode))
+        {
+          DIR* pDir = opendir(filename);
+          if (pDir != NULL)
+            {
+	      struct dirent dent;
+              struct dirent* dentp;
+              char *stFileName;
+              while (((readdir_r(pDir, &dent, &dentp)) == 0) && dentp)
+                {
+                  if (!g_ascii_strcasecmp(dentp->d_name, ".") || !g_ascii_strcasecmp(dentp->d_name, ".."))
+                      continue;
+
+                  stFileName = g_strconcat (filename, "/", dentp->d_name, NULL);
+                  if (stFileName && !stat(stFileName, &buf) && S_ISREG(buf.st_mode))
+                      result = load_anchor_file (stFileName, subjects, issuers, complete, error);
+                  g_free (stFileName);
+                }
+              closedir(pDir);
+            }
+        }
+    }
+  return result;
+}
+#endif
 
 static void
 g_tls_file_database_gnutls_finalize (GObject *object)
@@ -591,8 +641,15 @@ g_tls_file_database_gnutls_initable_init (GInitable    *initable,
 {
   GTlsFileDatabaseGnutls *self = G_TLS_FILE_DATABASE_GNUTLS (initable);
   GHashTable *subjects, *issuers, *complete;
+#if ENABLE(TIZEN_TV_MULTIPLE_CERTIFICATE)
+  gboolean result = FALSE;
+#else
   gboolean result;
+#endif
 
+#if ENABLE(TIZEN_TV_MULTIPLE_CERTIFICATE)
+  gboolean mutiple_certicate_result = FALSE;
+#endif
   if (g_cancellable_set_error_if_cancelled (cancellable, error))
     return FALSE;
 
@@ -603,8 +660,31 @@ g_tls_file_database_gnutls_initable_init (GInitable    *initable,
                                     (GDestroyNotify)g_bytes_unref,
                                     (GDestroyNotify)g_bytes_unref);
 
+#if ENABLE(TIZEN_TV_MULTIPLE_CERTIFICATE)
+  if (self->priv->anchor_filename)
+    {
+      gchar **paths = g_strsplit (self->priv->anchor_filename, ":", 0);
+      gint i;
+      for (i = 0; paths[i]; i++)
+        {
+          mutiple_certicate_result = traverse_load_anchor_file (paths[i], subjects, issuers, complete, error);
+          if (mutiple_certicate_result == TRUE)
+            result = TRUE;
+        }
+      if((*error == NULL) && (result == FALSE))
+        *error = g_error_new (G_CONVERT_ERROR, G_CONVERT_ERROR_ILLEGAL_SEQUENCE,
+                         _("Invalid byte sequence in conversion input"));
+      if((*error != NULL) && (result == TRUE))
+        g_error_free(*error);
+      g_strfreev(paths);
+    }
+  else
+   *error = g_error_new (G_CONVERT_ERROR, G_CONVERT_ERROR_ILLEGAL_SEQUENCE,
+                         _("Invalid byte sequence in conversion input"));
+#else
   result = load_anchor_file (self->priv->anchor_filename, subjects, issuers,
                              complete, error);
+#endif
 
   if (g_cancellable_set_error_if_cancelled (cancellable, error))
     result = FALSE;

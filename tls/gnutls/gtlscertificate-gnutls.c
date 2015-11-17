@@ -25,6 +25,7 @@
 
 #include "gtlscertificate-gnutls.h"
 #include <glib/gi18n-lib.h>
+#include "TIZEN.h"
 
 static void     g_tls_certificate_gnutls_initable_iface_init (GInitableIface  *iface);
 
@@ -267,6 +268,16 @@ g_tls_certificate_gnutls_set_property (GObject      *object,
     }
 }
 
+#if ENABLE(TIZEN_TV_ADJUST_TIME)
+extern double soupTimeOffset;
+
+static time_t
+correct_time_func(time_t *t)
+{
+  return time(NULL) + (time_t)(soupTimeOffset / 1000);
+}
+#endif
+
 static void
 g_tls_certificate_gnutls_init (GTlsCertificateGnutls *gnutls)
 {
@@ -275,6 +286,9 @@ g_tls_certificate_gnutls_init (GTlsCertificateGnutls *gnutls)
 					      GTlsCertificateGnutlsPrivate);
 
   gnutls_x509_crt_init (&gnutls->priv->cert);
+#if ENABLE(TIZEN_TV_ADJUST_TIME)
+  gnutls_global_set_time_function(correct_time_func);
+#endif
 }
 
 static gboolean
@@ -310,6 +324,10 @@ g_tls_certificate_gnutls_verify (GTlsCertificate     *cert,
   gnutls_x509_crt_t *chain;
   GTlsCertificateFlags gtls_flags;
   time_t t, now;
+#if ENABLE(TIZEN_TV_DLOG)
+  char timebuf[256];
+#endif
+
   
   cert_gnutls = G_TLS_CERTIFICATE_GNUTLS (cert);
   for (num_certs = 0; cert_gnutls; cert_gnutls = cert_gnutls->priv->issuer)
@@ -346,13 +364,38 @@ g_tls_certificate_gnutls_verify (GTlsCertificate     *cert,
    * won't bother if it gets an UNKNOWN_CA.
    */
   now = time (NULL);
+#if ENABLE(TIZEN_TV_ADJUST_TIME)
+  now = time (NULL) + (time_t)(soupTimeOffset / 1000);
+#endif
   for (i = 0; i < num_certs; i++)
     {
       t = gnutls_x509_crt_get_activation_time (chain[i]);
+
+#if ENABLE(TIZEN_TV_DLOG)
+      ctime_r(&now, timebuf);
+      TIZEN_LOGI("[Certificate] TV borad time is: %s", timebuf);
+      if (t != (time_t) -1) {
+	ctime_r(&t, timebuf);
+        TIZEN_LOGI("[Certificate] CA activation time is: %s", timebuf);
+      }
+      else
+        TIZEN_LOGI("[Certificate] gnutls_x509_crt_get_activation_time ERROR");
+#endif
+
       if (t == (time_t) -1 || t > now)
 	gtls_flags |= G_TLS_CERTIFICATE_NOT_ACTIVATED;
 
       t = gnutls_x509_crt_get_expiration_time (chain[i]);
+
+#if ENABLE(TIZEN_TV_DLOG)
+      if (t != (time_t) -1) {
+	ctime_r(&t, timebuf);
+        TIZEN_LOGI("[Certificate] CA expiration time is: %s", timebuf);
+      }
+      else
+        TIZEN_LOGI("[Certificate] gnutls_x509_crt_get_expiration_time ERROR");
+#endif
+
       if (t == (time_t) -1 || t < now)
 	gtls_flags |= G_TLS_CERTIFICATE_EXPIRED;
     }
@@ -541,6 +584,9 @@ g_tls_certificate_gnutls_verify_identity (GTlsCertificateGnutls *gnutls,
   /* FIXME: check sRVName and uniformResourceIdentifier
    * subjectAltNames, if appropriate for @identity.
    */
+#if ENABLE(TIZEN_TV_DLOG)
+  TIZEN_LOGI("[Network] SSL HandShake - Bad Identity");
+#endif
 
   return G_TLS_CERTIFICATE_BAD_IDENTITY;
 }
