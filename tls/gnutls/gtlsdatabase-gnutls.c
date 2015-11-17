@@ -29,6 +29,7 @@
 #include "gtlscertificate-gnutls.h"
 
 #include <glib/gi18n-lib.h>
+#include "TIZEN.h"
 
 G_DEFINE_ABSTRACT_TYPE (GTlsDatabaseGnutls, g_tls_database_gnutls, G_TYPE_TLS_DATABASE);
 
@@ -188,22 +189,56 @@ build_certificate_chain (GTlsDatabaseGnutls      *self,
   g_assert_not_reached ();
 }
 
+#if ENABLE(TIZEN_TV_ADJUST_TIME)
+extern double soupTimeOffset;
+#endif
+
 static GTlsCertificateFlags
 double_check_before_after_dates (GTlsCertificateGnutls *chain)
 {
   GTlsCertificateFlags gtls_flags = 0;
   gnutls_x509_crt_t cert;
   time_t t, now;
+#if ENABLE(TIZEN_TV_DLOG)
+  char timebuf[256];
+#endif
 
+#if ENABLE(TIZEN_TV_ADJUST_TIME)
+  now = time (NULL) + (time_t)(soupTimeOffset / 1000);
+#else
   now = time (NULL);
+#endif
+
   while (chain)
     {
       cert = g_tls_certificate_gnutls_get_cert (chain);
       t = gnutls_x509_crt_get_activation_time (cert);
+
+#if ENABLE(TIZEN_TV_DLOG)
+      ctime_r(&now, timebuf);
+      TIZEN_LOGI("[Certificate] TV borad time is: %s", timebuf);
+      if (t != (time_t) -1) {
+	ctime_r(&t, timebuf);
+        TIZEN_LOGI("[Certificate] CA activation time is: %s", timebuf);
+      }
+      else
+        TIZEN_LOGI("[Certificate] gnutls_x509_crt_get_activation_time ERROR");
+#endif
+
       if (t == (time_t) -1 || t > now)
         gtls_flags |= G_TLS_CERTIFICATE_NOT_ACTIVATED;
 
       t = gnutls_x509_crt_get_expiration_time (cert);
+
+#if ENABLE(TIZEN_TV_DLOG)
+      if (t != (time_t) -1) {
+	ctime_r(&t, timebuf);
+        TIZEN_LOGI("[Certificate] CA expiration time is: %s", timebuf);
+      }
+      else
+        TIZEN_LOGI("[Certificate] gnutls_x509_crt_get_expiration_time ERROR");
+#endif
+
       if (t == (time_t) -1 || t < now)
         gtls_flags |= G_TLS_CERTIFICATE_EXPIRED;
 

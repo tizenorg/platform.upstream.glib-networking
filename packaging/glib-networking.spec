@@ -10,11 +10,12 @@ Source99:       baselibs.conf
 Source1001:     glib-networking.manifest
 Url:            http://www.gnome.org
 BuildRequires:  intltool
+BuildRequires:  which
 BuildRequires:  libgcrypt-devel
 BuildRequires:  pkgconfig(dbus-1)
 BuildRequires:  pkgconfig(gio-2.0) >= 2.31.6
 BuildRequires:  pkgconfig(gnutls) >= 2.11.0
-BuildRequires:  pkgconfig(p11-kit-1) >= 0.8
+BuildRequires:  pkgconfig(dlog)
 %if %{with libproxy}
 BuildRequires:  pkgconfig(libproxy-1.0)
 %endif
@@ -36,10 +37,27 @@ cp %{SOURCE1001} .
 %if %{with libproxy}
     --with-libproxy  \
 %endif
-    --with-ca-certificates=/etc/ssl/ca-bundle.pem
+%if "%{?tizen_profile_name}" == "tv"
+    --enable-tizen-multiple-certificate=yes \
+    --enable-tizen-tv-update-default-priority \
+    --enable-tizen-dlog \
+    --enable-tizen-performance-test-log \
+    --enable-tizen-tv-adjust-time \
+%endif
+%if "%{?tizen_profile_name}" == "tv"
+    --with-ca-certificates=/opt/share/ca-certificates/
+%else
+    --with-ca-certificates=/opt/share/ca-certificates/ca-certificate.crt
+%endif
+
 %__make %{?_smp_mflags} V=1
 
 %install
+%if "%{?tizen_profile_name}" == "tv"
+rm -rf %{buildroot}
+mkdir -p %{buildroot}/opt/share/ca-certificates/
+cp wss.pem %{buildroot}/opt/share/ca-certificates/
+%endif
 %make_install
 %find_lang %{name}
 
@@ -52,8 +70,11 @@ cp %{SOURCE1001} .
 %files
 %manifest %{name}.manifest
 %defattr(-, root, root)
-%license COPYING
+%doc COPYING
 %{_libdir}/gio/modules/libgiognutls.so
+%if "%{?tizen_profile_name}" == "tv"
+/opt/share/ca-certificates/wss.pem
+%endif
 
 %if %{with libproxy}
 %{_libdir}/gio/modules/libgiolibproxy.so
