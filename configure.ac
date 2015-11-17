@@ -157,6 +157,86 @@ AM_CONDITIONAL(HAVE_PKCS11, [test "x$with_pkcs11" = "xyes"])
 AC_SUBST(PKCS11_CFLAGS)
 AC_SUBST(PKCS11_LIBS)
 
+dnl *************************
+dnl *** Tizen multiple certificate support  ***
+dnl *************************
+
+AC_ARG_ENABLE(tizen-multiple-certificate,
+	AS_HELP_STRING([--enable-tizen-multiple-certificate], [Enable Tizen multiple certificate support ]),        ,
+	enable_tizen_multiple_certificate=no)
+
+AC_MSG_CHECKING([for Tizen multiple certificate])
+if test $enable_tizen_multiple_certificate != no;then
+        AC_DEFINE(ENABLE_TIZEN_TV_MULTIPLE_CERTIFICATE, 1, [Add new feature, support to install more than one file, multiple file path will be seperated by colon symbol])
+fi
+AC_MSG_RESULT($enable_tizen_multiple_certificate)
+
+AM_CONDITIONAL(TIZEN_TV_MULTIPLE_CERTIFICATE, [test $enable_tizen_multiple_certificate = yes])
+
+dnl ***************************
+dnl *** Tizen dlog support  ***
+dnl ***************************
+
+AC_ARG_ENABLE(tizen-dlog,
+        AS_HELP_STRING([--enable-tizen-dlog], [Enable Tizen dlog support ]),        ,
+        enable_tizen_dlog=no)
+
+AC_MSG_CHECKING([for Tizen dlog])
+if test $enable_tizen_dlog != no;then
+        AC_DEFINE(ENABLE_TIZEN_TV_DLOG, 1, [Add new feature, support to add tizen dlog in glib-networking])
+fi
+AC_MSG_RESULT($enable_tizen_dlog)
+
+AM_CONDITIONAL(TIZEN_TV_DLOG, [test $enable_tizen_dlog = yes])
+
+dnl *****************************************************
+dnl *** Tizen update gnutls default priority support  ***
+dnl *****************************************************
+
+AC_ARG_ENABLE(tizen-tv-update-default-priority,
+        AS_HELP_STRING([--enable-tizen-tv-update-default-priority], [Enable Tizen update gnults default priority support ]),        ,
+        enable_tizen_tv_update_default_priority=no)
+
+AC_MSG_CHECKING([for Tizen tv update default priority])
+if test $enable_tizen_tv_update_default_priority != no;then
+        AC_DEFINE(ENABLE_TIZEN_TV_UPDATE_DEFAULT_PRIORITY, 1, [Add new feature, support to update gnutls default priority in glib-networking])
+fi
+AC_MSG_RESULT($enable_tizen_tv_update_default_priority)
+
+AM_CONDITIONAL(TIZEN_TV_UPDATE_DEFAULT_PRIORITY, [test $enable_tizen_tv_update_default_priority = yes])
+
+dnl *******************************
+dnl *** Tizen performance test  ***
+dnl *******************************
+
+AC_ARG_ENABLE(tizen-performance-test-log,
+        AS_HELP_STRING([--enable-tizen-performance-test-log], [Enable Tizen performance test log]),        ,
+	enable_tizen_performance_test_log=no)
+
+AC_MSG_CHECKING([for Tizen performance test log])
+if test $enable_tizen_performance_test_log != no;then
+	AC_DEFINE(ENABLE_TIZEN_PERFORMANCE_TEST_LOG, 1, [Add performance test log])
+fi
+AC_MSG_RESULT($enable_tizen_performance_test_log)
+
+AM_CONDITIONAL(TIZEN_PERFORMANCE_TEST_LOG, [test $enable_tizen_performance_test_log = yes])
+
+dnl *************************************************************************
+dnl *** Use soupTimeOffset to adjust time for certificate or cookie case  ***
+dnl *************************************************************************
+
+AC_ARG_ENABLE(tizen-tv-adjust-time,
+        AS_HELP_STRING([--enable-tizen-tv-adjust-time], [Enable Tizen use soupTimeOffset to adjust time for certificate or cookie case ]),        ,
+        enable_tizen_tv_adjust_time=no)
+
+AC_MSG_CHECKING([for Tizen use soupTimeOffset to adjust time for certificate or cookie case])
+if test $enable_tizen_tv_adjust_time != no;then
+        AC_DEFINE(ENABLE_TIZEN_TV_ADJUST_TIME, 1, [Add new feature, which use soupTimeOffset to adjust time for certificate or cookie case])
+fi
+AC_MSG_RESULT($enable_tizen_tv_adjust_time)
+
+AM_CONDITIONAL(TIZEN_TV_ADJUST_TIME, [test $enable_tizen_tv_adjust_time = yes])
+
 dnl ************************************
 dnl *** Enable lcov coverage reports ***
 dnl ************************************

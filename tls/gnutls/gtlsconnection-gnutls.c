@@ -38,6 +38,16 @@
 
 #include <glib/gi18n-lib.h>
 
+#include "TIZEN.h"
+
+#if ENABLE(TIZEN_PERFORMANCE_TEST_LOG)
+#include <sys/prctl.h>
+#ifndef PR_TASK_PERF_USER_TRACE
+#define PR_TASK_PERF_USER_TRACE 666
+#endif
+#define HWCLOCK_LOG(s)	{const char *str=s; prctl(PR_TASK_PERF_USER_TRACE, str, strlen(str));}
+#endif
+
 static ssize_t g_tls_connection_gnutls_push_func (gnutls_transport_ptr_t  transport_data,
 						  const void             *buf,
 						  size_t                  buflen);
@@ -196,6 +206,10 @@ g_tls_connection_gnutls_init (GTlsConnectionGnutls *gnutls)
 /* First field is "ssl3 only", second is "allow unsafe rehandshaking" */
 static gnutls_priority_t priorities[2][2];
 
+#if ENABLE(TIZEN_TV_UPDATE_DEFAULT_PRIORITY)
+#define DEFAULT_BASE_PRIORITY "NORMAL:%COMPAT:%LATEST_RECORD_VERSION"
+#endif
+
 static void
 g_tls_connection_gnutls_init_priorities (void)
 {
@@ -206,12 +220,20 @@ g_tls_connection_gnutls_init_priorities (void)
   base_priority = g_getenv ("G_TLS_GNUTLS_PRIORITY");
   if (!base_priority)
     base_priority = "NORMAL:%COMPAT";
+#if ENABLE(TIZEN_TV_UPDATE_DEFAULT_PRIORITY)
+  ret = gnutls_priority_init (&priorities[FALSE][FALSE], DEFAULT_BASE_PRIORITY, NULL);
+#else
   ret = gnutls_priority_init (&priorities[FALSE][FALSE], base_priority, NULL);
+#endif
   if (ret == GNUTLS_E_INVALID_REQUEST)
     {
       g_warning ("G_TLS_GNUTLS_PRIORITY is invalid; ignoring!");
       base_priority = "NORMAL:%COMPAT";
+#if ENABLE(TIZEN_TV_UPDATE_DEFAULT_PRIORITY)
+      gnutls_priority_init (&priorities[FALSE][FALSE], DEFAULT_BASE_PRIORITY, NULL);
+#else
       gnutls_priority_init (&priorities[FALSE][FALSE], base_priority, NULL);
+#endif
     }
 
   ssl3_priority = g_strdup_printf ("%s:!VERS-TLS1.2:!VERS-TLS1.1:!VERS-TLS1.0", base_priority);
@@ -1098,6 +1120,11 @@ verify_peer_certificate (GTlsConnectionGnutls *gnutls,
   database = g_tls_connection_get_database (conn);
   if (database == NULL)
     {
+
+#if ENABLE(TIZEN_TV_DLOG)
+      TIZEN_LOGI("[Network] SSL HandShake - Unknown CA");
+#endif
+
       errors |= G_TLS_CERTIFICATE_UNKNOWN_CA;
       errors |= g_tls_certificate_verify (peer_certificate, peer_identity, NULL);
     }
@@ -1222,6 +1249,10 @@ accept_peer_certificate (GTlsConnectionGnutls *gnutls,
 {
   gboolean accepted;
 
+#if ENABLE(TIZEN_PERFORMANCE_TEST_LOG)
+  HWCLOCK_LOG("[BGN] gnutls_verify_peer");
+#endif
+
   if (G_IS_TLS_CLIENT_CONNECTION (gnutls))
     {
       GTlsCertificateFlags validation_flags =
@@ -1242,6 +1273,10 @@ accept_peer_certificate (GTlsConnectionGnutls *gnutls,
 							   peer_certificate,
 							   peer_certificate_errors);
     }
+
+#if ENABLE(TIZEN_PERFORMANCE_TEST_LOG)
+  HWCLOCK_LOG("[END] gnutls_verify_peer");
+#endif
 
   return accepted;
 }
