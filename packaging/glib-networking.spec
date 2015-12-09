@@ -37,14 +37,14 @@ cp %{SOURCE1001} .
 %if %{with libproxy}
     --with-libproxy  \
 %endif
-%if "%{?tizen_profile_name}" == "tv"
+%if "%{?profile}" == "tv"
     --enable-tizen-multiple-certificate=yes \
     --enable-tizen-tv-update-default-priority \
     --enable-tizen-dlog \
     --enable-tizen-performance-test-log \
     --enable-tizen-tv-adjust-time \
 %endif
-%if "%{?tizen_profile_name}" == "tv"
+%if "%{?profile}" == "tv"
     --with-ca-certificates=/opt/share/ca-certificates/
 %else
     --with-ca-certificates=/opt/share/ca-certificates/ca-certificate.crt
@@ -53,7 +53,7 @@ cp %{SOURCE1001} .
 %__make %{?_smp_mflags} V=1
 
 %install
-%if "%{?tizen_profile_name}" == "tv"
+%if "%{?profile}" == "tv"
 rm -rf %{buildroot}
 mkdir -p %{buildroot}/opt/share/ca-certificates/
 cp wss.pem %{buildroot}/opt/share/ca-certificates/
@@ -72,7 +72,7 @@ cp wss.pem %{buildroot}/opt/share/ca-certificates/
 %defattr(-, root, root)
 %doc COPYING
 %{_libdir}/gio/modules/libgiognutls.so
-%if "%{?tizen_profile_name}" == "tv"
+%if "%{?profile}" == "tv"
 /opt/share/ca-certificates/wss.pem
 %endif
 
