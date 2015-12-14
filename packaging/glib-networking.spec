@@ -47,7 +47,7 @@ cp %{SOURCE1001} .
 %if "%{?profile}" == "tv"
     --with-ca-certificates=/opt/share/ca-certificates/
 %else
-    --with-ca-certificates=/opt/share/ca-certificates/ca-certificate.crt
+    --with-ca-certificates=/etc/ssl/ca-bundle.pem
 %endif
 
 %__make %{?_smp_mflags} V=1
