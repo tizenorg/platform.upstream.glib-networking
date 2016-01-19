@@ -324,7 +324,10 @@ g_tls_connection_gnutls_finalize (GObject *object)
 
   g_clear_object (&gnutls->priv->database);
   g_clear_object (&gnutls->priv->certificate);
-  g_clear_object (&gnutls->priv->peer_certificate);
+#if ENABLE(TIZEN_EXT)
+  if (gnutls->priv->peer_certificate)
+#endif
+	  g_clear_object (&gnutls->priv->peer_certificate);
   g_clear_object (&gnutls->priv->peer_certificate_tmp);
 
   g_clear_pointer (&gnutls->priv->app_data_buf, g_byte_array_unref);
