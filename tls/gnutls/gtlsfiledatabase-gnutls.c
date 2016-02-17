@@ -208,7 +208,7 @@ load_anchor_file (const gchar *filename,
       g_propagate_error (error, my_error);
 #if ENABLE(TIZEN_TV_MULTIPLE_CERTIFICATE)
       if ((error != NULL) && (*error != my_error))
-        g_error_free (my_error);
+        g_clear_error (&my_error);
 #endif
       return FALSE;
     }
@@ -675,7 +675,7 @@ g_tls_file_database_gnutls_initable_init (GInitable    *initable,
         *error = g_error_new (G_CONVERT_ERROR, G_CONVERT_ERROR_ILLEGAL_SEQUENCE,
                          _("Invalid byte sequence in conversion input"));
       if((*error != NULL) && (result == TRUE))
-        g_error_free(*error);
+        g_clear_error (error);
       g_strfreev(paths);
     }
   else
