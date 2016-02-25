@@ -413,24 +413,45 @@ g_tls_certificate_gnutls_real_copy (GTlsCertificateGnutls    *gnutls,
                                     const gchar              *interaction_id,
                                     gnutls_retr2_st          *st)
 {
+  GTlsCertificateGnutls *chain;
   gnutls_x509_crt_t cert;
   gnutls_datum_t data;
+  guint num_certs = 0;
   size_t size = 0;
 
-  gnutls_x509_crt_export (gnutls->priv->cert, GNUTLS_X509_FMT_DER,
-                          NULL, &size);
-  data.data = g_malloc (size);
-  data.size = size;
-  gnutls_x509_crt_export (gnutls->priv->cert, GNUTLS_X509_FMT_DER,
-                          data.data, &size);
+  /* We will do this loop twice. It's probably more efficient than
+   * re-allocating memory.
+   */
+  chain = gnutls;
+  while (chain != NULL)
+    {
+      num_certs++;
+      chain = chain->priv->issuer;
+    }
 
-  gnutls_x509_crt_init (&cert);
-  gnutls_x509_crt_import (cert, &data, GNUTLS_X509_FMT_DER);
-  g_free (data.data);
+  st->ncerts = 0;
+  st->cert.x509 = gnutls_malloc (sizeof (gnutls_x509_crt_t) * num_certs);
 
-  st->ncerts = 1;
-  st->cert.x509 = gnutls_malloc (sizeof (gnutls_x509_crt_t));
-  st->cert.x509[0] = cert;
+/* Now do the actual copy of the whole chain. */
+  chain = gnutls;
+  while (chain != NULL)
+    {
+      gnutls_x509_crt_export (chain->priv->cert, GNUTLS_X509_FMT_DER,
+                              NULL, &size);
+      data.data = g_malloc (size);
+      data.size = size;
+      gnutls_x509_crt_export (chain->priv->cert, GNUTLS_X509_FMT_DER,
+                              data.data, &size);
+
+      gnutls_x509_crt_init (&cert);
+      gnutls_x509_crt_import (cert, &data, GNUTLS_X509_FMT_DER);
+      g_free (data.data);
+
+      st->cert.x509[st->ncerts] = cert;
+      st->ncerts++;
+
+      chain = chain->priv->issuer;
+    }
 
   if (gnutls->priv->key != NULL)
     {
