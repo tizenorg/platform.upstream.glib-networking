@@ -207,7 +207,7 @@ g_tls_connection_gnutls_init (GTlsConnectionGnutls *gnutls)
 static gnutls_priority_t priorities[2][2];
 
 #if ENABLE(TIZEN_TV_UPDATE_DEFAULT_PRIORITY)
-#define DEFAULT_BASE_PRIORITY "NORMAL:%COMPAT:%LATEST_RECORD_VERSION"
+#define DEFAULT_BASE_PRIORITY "NORMAL:%COMPAT:!VERS-SSL3.0:%LATEST_RECORD_VERSION"
 #endif
 
 static void
@@ -219,7 +219,7 @@ g_tls_connection_gnutls_init_priorities (void)
 
   base_priority = g_getenv ("G_TLS_GNUTLS_PRIORITY");
   if (!base_priority)
-    base_priority = "NORMAL:%COMPAT";
+    base_priority = "NORMAL:%COMPAT:!VERS-SSL3.0";
 #if ENABLE(TIZEN_TV_UPDATE_DEFAULT_PRIORITY)
   ret = gnutls_priority_init (&priorities[FALSE][FALSE], DEFAULT_BASE_PRIORITY, NULL);
 #else
@@ -228,7 +228,7 @@ g_tls_connection_gnutls_init_priorities (void)
   if (ret == GNUTLS_E_INVALID_REQUEST)
     {
       g_warning ("G_TLS_GNUTLS_PRIORITY is invalid; ignoring!");
-      base_priority = "NORMAL:%COMPAT";
+      base_priority = "NORMAL:%COMPAT:!VERS-SSL3.0";
 #if ENABLE(TIZEN_TV_UPDATE_DEFAULT_PRIORITY)
       gnutls_priority_init (&priorities[FALSE][FALSE], DEFAULT_BASE_PRIORITY, NULL);
 #else
