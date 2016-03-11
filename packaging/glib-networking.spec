@@ -45,9 +45,9 @@ cp %{SOURCE1001} .
     --enable-tizen-tv-adjust-time \
 %endif
 %if "%{?profile}" == "tv"
-    --with-ca-certificates=/opt/share/ca-certificates/
+    --with-ca-certificates=%{TZ_SYS_SHARE}/ca-certificates/
 %else
-    --with-ca-certificates=/opt/share/ca-certificates/ca-certificate.crt
+    --with-ca-certificates=%{TZ_SYS_SHARE}/ca-certificates/ca-certificate.crt
 %endif
 
 %__make %{?_smp_mflags} V=1
@@ -55,8 +55,8 @@ cp %{SOURCE1001} .
 %install
 %if "%{?profile}" == "tv"
 rm -rf %{buildroot}
-mkdir -p %{buildroot}/opt/share/ca-certificates/
-cp wss.pem %{buildroot}/opt/share/ca-certificates/
+mkdir -p %{buildroot}%{TZ_SYS_SHARE}/ca-certificates/
+cp wss.pem %{buildroot}%{TZ_SYS_SHARE}/ca-certificates/
 %endif
 %make_install
 %find_lang %{name}
@@ -73,7 +73,7 @@ cp wss.pem %{buildroot}/opt/share/ca-certificates/
 %doc COPYING
 %{_libdir}/gio/modules/libgiognutls.so
 %if "%{?profile}" == "tv"
-/opt/share/ca-certificates/wss.pem
+%{TZ_SYS_SHARE}/ca-certificates/wss.pem
 %endif
 
 %if %{with libproxy}
