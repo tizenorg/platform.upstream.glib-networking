@@ -16,7 +16,7 @@ BuildRequires:  pkgconfig(dbus-1)
 BuildRequires:  pkgconfig(gio-2.0) >= 2.31.6
 BuildRequires:  pkgconfig(gnutls) >= 2.11.0
 BuildRequires:  pkgconfig(dlog)
-BuildRequires:  libtzplatform-config-devel
+BuildRequires:  pkgconfig(libtzplatform-config)
 %if %{with libproxy}
 BuildRequires:  pkgconfig(libproxy-1.0)
 %endif
@@ -46,9 +46,9 @@ cp %{SOURCE1001} .
     --enable-tizen-tv-adjust-time \
 %endif
 %if "%{?profile}" == "tv"
-    --with-ca-certificates=%{TZ_SYS_SHARE}/ca-certificates/
+    --with-ca-certificates=%{TZ_SYS_RO_CA_CERTS}
 %else
-    --with-ca-certificates=%{TZ_SYS_SHARE}/ca-certificates/ca-certificate.crt
+    --with-ca-certificates=%{TZ_SYS_RO_CA_BUNDLE}
 %endif
 
 %__make %{?_smp_mflags} V=1
