@@ -16,6 +16,7 @@ BuildRequires:  pkgconfig(dbus-1)
 BuildRequires:  pkgconfig(gio-2.0) >= 2.31.6
 BuildRequires:  pkgconfig(gnutls) >= 2.11.0
 BuildRequires:  pkgconfig(dlog)
+BuildRequires:  pkgconfig(libtzplatform-config)
 BuildRequires:  ca-certificates-devel
 Requires: ca-certificates
 %if %{with libproxy}
