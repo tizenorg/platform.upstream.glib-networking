@@ -45,7 +45,6 @@ cp %{SOURCE1001} .
     --enable-tizen-tv-update-default-priority \
     --enable-tizen-dlog \
     --enable-tizen-performance-test-log \
-    --enable-tizen-tv-adjust-time \
 %endif
 %if "%{?profile}" == "tv"
     --with-ca-certificates=%{TZ_SYS_RO_CA_CERTS}
